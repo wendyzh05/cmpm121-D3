@@ -29,3 +29,4 @@ Key gameplay challenge: Enable picking up, combining, and crafting seeds up to t
 - [x] Fix holding plants
 - [x] Popup messages
 - [x] Show a message when the plant is far
+- [x] Remove code smells

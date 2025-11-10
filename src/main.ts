@@ -6,19 +6,6 @@ import "./style.css";
 import "./_leafletWorkaround.ts";
 import luck from "./_luck.ts";
 
-// UI elements
-const controlPanelDiv = document.createElement("div");
-controlPanelDiv.id = "controlPanel";
-document.body.append(controlPanelDiv);
-
-const mapDiv = document.createElement("div");
-mapDiv.id = "map";
-document.body.append(mapDiv);
-
-const statusPanelDiv = document.createElement("div");
-statusPanelDiv.id = "statusPanel";
-document.body.append(statusPanelDiv);
-
 // Game constants
 const CLASSROOM_LATLNG = leaflet.latLng(
   36.997936938057016,
@@ -29,6 +16,17 @@ const ZOOM = 19;
 const SPAWN_RADIUS = 0.002;
 const TOKEN_COUNT = 80;
 const INTERACT_DISTANCE = 30;
+
+// UI elements
+function createDiv(id: string): HTMLDivElement {
+  const div = document.createElement("div");
+  div.id = id;
+  document.body.append(div);
+  return div;
+}
+
+const mapDiv = createDiv("map");
+const statusPanelDiv = createDiv("statusPanel");
 
 // Map setup
 const map = leaflet.map(mapDiv, {
@@ -46,8 +44,17 @@ leaflet
 
 const playerMarker = leaflet.marker(CLASSROOM_LATLNG).addTo(map);
 
-// Inventory
+// Game State
 let heldValue: number | null = null;
+
+type PlantToken = {
+  lat: number;
+  lng: number;
+  value: number;
+  marker: leaflet.Marker;
+};
+
+const tokens: PlantToken[] = [];
 
 function emojiFor(v: number): string {
   const m: Record<number, string> = {
@@ -70,134 +77,117 @@ function updateStatus() {
     : `In hand: ${emojiFor(heldValue)} (${heldValue})`;
 }
 
-updateStatus();
-
-// Random plant token spawning (deterministic)
-type PlantToken = {
-  lat: number;
-  lng: number;
-  value: number;
-  marker: leaflet.Marker;
-};
-
-const tokens: PlantToken[] = [];
-
-function spawnTokens() {
-  for (let n = 0; n < TOKEN_COUNT; n++) {
-    const r = luck("token-" + n);
-    const r2 = luck("token-pos-" + n);
-
-    // random angle + radius around player
-    const angle = r * 2 * Math.PI;
-    const dist = r2 * SPAWN_RADIUS;
-
-    const lat = CLASSROOM_LATLNG.lat + Math.cos(angle) * dist;
-    const lng = CLASSROOM_LATLNG.lng + Math.sin(angle) * dist;
-
-    // random value: 1 always (matching D3.a initial seeds)
-    const value = 1;
-
-    const marker = leaflet.marker([lat, lng], {
-      icon: leaflet.divIcon({
-        className: "token-label",
-        html: `<div style="font-size:22px;">${emojiFor(value)}</div>`,
-      }),
-    }).addTo(map);
-
-    const token: PlantToken = { lat, lng, value, marker };
-    tokens.push(token);
-
-    marker.on("mouseover", () => {
-      marker.bindPopup(`
-        <div style="font-size:18px;">
-          ${emojiFor(token.value)} Value ${token.value}
-        </div>
-        <div style="margin-top:6px;font-size:12px;">
-          <b>Hover:</b> View plant info<br>
-          <b>Click:</b> Pick up or merge<br>
-          <small>Stay within ${INTERACT_DISTANCE}m</small>
-        </div>
-      `).openPopup();
-    });
-
-    marker.on("mouseout", () => {
-      marker.closePopup();
-    });
-    marker.on("click", () => onTokenClick(token));
-  }
-}
-
-// Distance helper
 function meters(a: leaflet.LatLng, b: leaflet.LatLng) {
   return a.distanceTo(b);
 }
 
-// Token interaction
+function randomLatLng(
+  center: leaflet.LatLng,
+  radius: number,
+  seed1: number,
+  seed2: number,
+) {
+  const angle = seed1 * 2 * Math.PI;
+  const dist = seed2 * radius;
+  return leaflet.latLng(
+    center.lat + Math.cos(angle) * dist,
+    center.lng + Math.sin(angle) * dist,
+  );
+}
+
+function bindTokenPopup(token: PlantToken) {
+  token.marker.on("mouseover", () => {
+    token.marker.bindPopup(`
+      <div style="font-size:16px;">
+        ${emojiFor(token.value)} Value ${token.value}
+        <br><small>Move within ${INTERACT_DISTANCE}m to interact</small>
+      </div>
+    `).openPopup();
+  });
+  token.marker.on("mouseout", () => token.marker.closePopup());
+  token.marker.on("click", () => onTokenClick(token));
+}
+
+// Random plant token spawning (deterministic)
+
+function spawnTokens() {
+  for (let n = 0; n < TOKEN_COUNT; n++) {
+    const latLng = randomLatLng(
+      CLASSROOM_LATLNG,
+      SPAWN_RADIUS,
+      luck("token-" + n),
+      luck("token-pos-" + n),
+    );
+
+    const value = 1; // initial token value
+
+    const marker = leaflet.marker([latLng.lat, latLng.lng], {
+      icon: leaflet.divIcon({
+        className: "token-label",
+        html: emojiFor(value),
+      }),
+    }).addTo(map);
+
+    const token: PlantToken = {
+      lat: latLng.lat,
+      lng: latLng.lng,
+      value,
+      marker,
+    };
+    tokens.push(token);
+
+    bindTokenPopup(token);
+  }
+}
+
+function pickUpToken(token: PlantToken) {
+  heldValue = token.value;
+  token.marker.remove();
+  token.value = 0;
+  updateStatus();
+  checkWin();
+}
+
+function mergeToken(token: PlantToken): boolean {
+  if (heldValue === null || heldValue !== token.value) return false;
+
+  const newVal = heldValue * 2;
+  heldValue = null;
+
+  token.marker.remove();
+  token.value = newVal;
+  token.marker = leaflet.marker([token.lat, token.lng], {
+    icon: leaflet.divIcon({ className: "token-label", html: emojiFor(newVal) }),
+  }).addTo(map);
+
+  bindTokenPopup(token);
+  updateStatus();
+  checkWin();
+  return true;
+}
+
 function onTokenClick(token: PlantToken) {
   const playerPos = playerMarker.getLatLng();
   const tokenPos = leaflet.latLng(token.lat, token.lng);
   const dist = meters(playerPos, tokenPos);
 
-  // Too far
   if (dist > INTERACT_DISTANCE) {
     statusPanelDiv.textContent = `Too far! Move closer. Distance: ${
       dist.toFixed(0)
-    }m / Allowed: ${INTERACT_DISTANCE}m`;
-    alert(`You are too far away (${dist.toFixed(0)}m). Move closer!`);
+    }m`;
     return;
   }
 
-  // MERGE (same value)
-  if (heldValue !== null && token.value === heldValue) {
-    const newVal = heldValue * 2;
+  if (mergeToken(token)) return;
 
-    // Update token
-    heldValue = null;
-    token.value = newVal;
-
-    token.marker.remove();
-    token.marker = leaflet.marker([token.lat, token.lng], {
-      icon: leaflet.divIcon({
-        className: "token-label",
-        html: `<div style="font-size:22px;">${emojiFor(newVal)}</div>`,
-      }),
-    }).addTo(map);
-
-    // hover popup for merged token
-    token.marker.on("mouseover", () => {
-      token.marker.bindPopup(`
-        <div style="font-size:16px;">
-          ${emojiFor(newVal)} Value ${newVal}
-          <br><small>Move within ${INTERACT_DISTANCE}m to interact</small>
-        </div>
-      `).openPopup();
-    });
-
-    token.marker.on("mouseout", () => token.marker.closePopup());
-
-    token.marker.on("click", () => onTokenClick(token));
-
-    updateStatus();
-    checkWin();
-    return;
-  }
-
-  // PICK UP (always allowed when not merging)
-  heldValue = token.value;
-
-  token.marker.remove();
-  token.value = 0;
-
-  updateStatus();
-  checkWin();
+  pickUpToken(token);
 }
 
-// Win condition
 function checkWin() {
   if (heldValue !== null && heldValue >= 256) {
     alert("You grew a 🌳 TREE! You win!");
   }
 }
 
-// Start
+updateStatus();
 spawnTokens();
