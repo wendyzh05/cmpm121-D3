@@ -1,18 +1,12 @@
 // @deno-types="npm:@types/leaflet"
 import leaflet from "leaflet";
 
-// Style sheets
-import "leaflet/dist/leaflet.css"; // supporting style for Leaflet
-import "./style.css"; // student-controlled page style
-
-// Fix missing marker images
-import "./_leafletWorkaround.ts"; // fixes for missing Leaflet images
-
-// Import our luck function
+import "leaflet/dist/leaflet.css";
+import "./style.css";
+import "./_leafletWorkaround.ts";
 import luck from "./_luck.ts";
 
-// Create basic UI elements
-
+// UI elements
 const controlPanelDiv = document.createElement("div");
 controlPanelDiv.id = "controlPanel";
 document.body.append(controlPanelDiv);
@@ -25,91 +19,149 @@ const statusPanelDiv = document.createElement("div");
 statusPanelDiv.id = "statusPanel";
 document.body.append(statusPanelDiv);
 
-// Our classroom location
+// Game constants
 const CLASSROOM_LATLNG = leaflet.latLng(
   36.997936938057016,
   -122.05703507501151,
 );
 
-// Tunable gameplay parameters
-const GAMEPLAY_ZOOM_LEVEL = 19;
-const TILE_DEGREES = 1e-4;
-const NEIGHBORHOOD_SIZE = 8;
-const CACHE_SPAWN_PROBABILITY = 0.1;
+const ZOOM = 19;
+const SPAWN_RADIUS = 0.002; 
+const TOKEN_COUNT = 80; 
+const INTERACT_DISTANCE = 30; 
 
-// Create the map (element with id "map" is defined in index.html)
+// Map setup
 const map = leaflet.map(mapDiv, {
   center: CLASSROOM_LATLNG,
-  zoom: GAMEPLAY_ZOOM_LEVEL,
-  minZoom: GAMEPLAY_ZOOM_LEVEL,
-  maxZoom: GAMEPLAY_ZOOM_LEVEL,
+  zoom: ZOOM,
+  minZoom: ZOOM,
+  maxZoom: ZOOM,
   zoomControl: false,
   scrollWheelZoom: false,
 });
 
-// Populate the map with a background tile layer
 leaflet
-  .tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
-    maxZoom: 19,
-    attribution:
-      '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-  })
+  .tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19 })
   .addTo(map);
 
-// Add a marker to represent the player
-const playerMarker = leaflet.marker(CLASSROOM_LATLNG);
-playerMarker.bindTooltip("That's you!");
-playerMarker.addTo(map);
+const playerMarker = leaflet.marker(CLASSROOM_LATLNG).addTo(map);
 
-// Display the player's points
-let playerPoints = 0;
-statusPanelDiv.innerHTML = "No points yet...";
+// Inventory
+let heldValue: number | null = null;
 
-// Add caches to the map by cell numbers
-function spawnCache(i: number, j: number) {
-  // Convert cell numbers into lat/lng bounds
-  const origin = CLASSROOM_LATLNG;
-  const bounds = leaflet.latLngBounds([
-    [origin.lat + i * TILE_DEGREES, origin.lng + j * TILE_DEGREES],
-    [origin.lat + (i + 1) * TILE_DEGREES, origin.lng + (j + 1) * TILE_DEGREES],
-  ]);
-
-  // Add a rectangle to the map to represent the cache
-  const rect = leaflet.rectangle(bounds);
-  rect.addTo(map);
-
-  // Handle interactions with the cache
-  rect.bindPopup(() => {
-    // Each cache has a random point value, mutable by the player
-    let pointValue = Math.floor(luck([i, j, "initialValue"].toString()) * 100);
-
-    // The popup offers a description and button
-    const popupDiv = document.createElement("div");
-    popupDiv.innerHTML = `
-                <div>There is a cache here at "${i},${j}". It has value <span id="value">${pointValue}</span>.</div>
-                <button id="poke">poke</button>`;
-
-    // Clicking the button decrements the cache's value and increments the player's points
-    popupDiv
-      .querySelector<HTMLButtonElement>("#poke")!
-      .addEventListener("click", () => {
-        pointValue--;
-        popupDiv.querySelector<HTMLSpanElement>("#value")!.innerHTML =
-          pointValue.toString();
-        playerPoints++;
-        statusPanelDiv.innerHTML = `${playerPoints} points accumulated`;
-      });
-
-    return popupDiv;
-  });
+function emojiFor(v: number): string {
+  const m: Record<number, string> = {
+    1: "🌱",
+    2: "🌿",
+    4: "🌸",
+    8: "🌻",
+    16: "🌷",
+    32: "🌺",
+    64: "🌴",
+    128: "🌾",
+    256: "🌳",
+  };
+  return m[v] ?? "";
 }
 
-// Look around the player's neighborhood for caches to spawn
-for (let i = -NEIGHBORHOOD_SIZE; i < NEIGHBORHOOD_SIZE; i++) {
-  for (let j = -NEIGHBORHOOD_SIZE; j < NEIGHBORHOOD_SIZE; j++) {
-    // If location i,j is lucky enough, spawn a cache!
-    if (luck([i, j].toString()) < CACHE_SPAWN_PROBABILITY) {
-      spawnCache(i, j);
-    }
+function updateStatus() {
+  statusPanelDiv.textContent =
+    heldValue === null
+      ? "In hand: empty"
+      : `In hand: ${emojiFor(heldValue)} (${heldValue})`;
+}
+
+updateStatus();
+
+
+// Random plant token spawning (deterministic)
+type PlantToken = {
+  lat: number;
+  lng: number;
+  value: number;
+  marker: leaflet.Marker;
+};
+
+
+const tokens: PlantToken[] = [];
+
+function spawnTokens() {
+  for (let n = 0; n < TOKEN_COUNT; n++) {
+    const r = luck("token-" + n);
+    const r2 = luck("token-pos-" + n);
+
+    // random angle + radius around player
+    const angle = r * 2 * Math.PI;
+    const dist = r2 * SPAWN_RADIUS;
+
+    const lat = CLASSROOM_LATLNG.lat + Math.cos(angle) * dist;
+    const lng = CLASSROOM_LATLNG.lng + Math.sin(angle) * dist;
+
+    // random value: 1 always (matching D3.a initial seeds)
+    const value = 1;
+
+    const marker = leaflet.marker([lat, lng], {
+      icon: leaflet.divIcon({
+        className: "token-label",
+        html: `<div style="font-size:22px;">${emojiFor(value)}</div>`,
+      }),
+    }).addTo(map);
+
+    marker.on("click", () => onTokenClick(token));
+
+    const token: PlantToken = { lat, lng, value, marker };
+    tokens.push(token);
   }
 }
+
+
+// Distance helper
+function meters(a: leaflet.LatLng, b: leaflet.LatLng) {
+  return a.distanceTo(b);
+}
+
+// Token interaction
+function onTokenClick(token: PlantToken) {
+  const playerPos = playerMarker.getLatLng();
+  const tokenPos = leaflet.latLng(token.lat, token.lng);
+
+  if (meters(playerPos, tokenPos) > INTERACT_DISTANCE) return;
+
+  // pick up
+  if (heldValue === null) {
+    heldValue = token.value;
+    token.marker.remove();
+    token.value = 0;
+    updateStatus();
+    checkWin();
+    return;
+  }
+
+  // craft
+  if (token.value === heldValue) {
+    const newVal = heldValue * 2;
+    heldValue = null;
+    token.value = newVal;
+
+    token.marker.remove();
+    token.marker = leaflet.marker([token.lat, token.lng], {
+      icon: leaflet.divIcon({
+        className: "token-label",
+        html: `<div style="font-size:22px;">${emojiFor(newVal)}</div>`,
+      }),
+    }).addTo(map);
+
+    updateStatus();
+    checkWin();
+  }
+}
+
+// Win condition
+function checkWin() {
+  if (heldValue !== null && heldValue >= 256) {
+    alert("You grew a 🌳 TREE! You win!");
+  }
+}
+
+// Start
+spawnTokens();
