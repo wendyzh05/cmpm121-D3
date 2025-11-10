@@ -26,9 +26,9 @@ const CLASSROOM_LATLNG = leaflet.latLng(
 );
 
 const ZOOM = 19;
-const SPAWN_RADIUS = 0.002; 
-const TOKEN_COUNT = 80; 
-const INTERACT_DISTANCE = 30; 
+const SPAWN_RADIUS = 0.002;
+const TOKEN_COUNT = 80;
+const INTERACT_DISTANCE = 30;
 
 // Map setup
 const map = leaflet.map(mapDiv, {
@@ -65,14 +65,12 @@ function emojiFor(v: number): string {
 }
 
 function updateStatus() {
-  statusPanelDiv.textContent =
-    heldValue === null
-      ? "In hand: empty"
-      : `In hand: ${emojiFor(heldValue)} (${heldValue})`;
+  statusPanelDiv.textContent = heldValue === null
+    ? "In hand: empty"
+    : `In hand: ${emojiFor(heldValue)} (${heldValue})`;
 }
 
 updateStatus();
-
 
 // Random plant token spawning (deterministic)
 type PlantToken = {
@@ -81,7 +79,6 @@ type PlantToken = {
   value: number;
   marker: leaflet.Marker;
 };
-
 
 const tokens: PlantToken[] = [];
 
@@ -107,13 +104,13 @@ function spawnTokens() {
       }),
     }).addTo(map);
 
-    marker.on("click", () => onTokenClick(token));
-
     const token: PlantToken = { lat, lng, value, marker };
     tokens.push(token);
+
+    if (token.value === 0) return;
+    marker.on("click", () => onTokenClick(token));
   }
 }
-
 
 // Distance helper
 function meters(a: leaflet.LatLng, b: leaflet.LatLng) {
@@ -127,19 +124,9 @@ function onTokenClick(token: PlantToken) {
 
   if (meters(playerPos, tokenPos) > INTERACT_DISTANCE) return;
 
-  // pick up
-  if (heldValue === null) {
-    heldValue = token.value;
-    token.marker.remove();
-    token.value = 0;
-    updateStatus();
-    checkWin();
-    return;
-  }
-
-  // craft
-  if (token.value === heldValue) {
+  if (heldValue !== null && token.value === heldValue) {
     const newVal = heldValue * 2;
+
     heldValue = null;
     token.value = newVal;
 
@@ -150,10 +137,20 @@ function onTokenClick(token: PlantToken) {
         html: `<div style="font-size:22px;">${emojiFor(newVal)}</div>`,
       }),
     }).addTo(map);
+    token.marker.on("click", () => onTokenClick(token));
 
     updateStatus();
     checkWin();
+    return;
   }
+
+  heldValue = token.value;
+
+  token.marker.remove();
+  token.value = 0;
+
+  updateStatus();
+  checkWin();
 }
 
 // Win condition
