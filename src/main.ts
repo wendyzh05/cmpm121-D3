@@ -107,7 +107,22 @@ function spawnTokens() {
     const token: PlantToken = { lat, lng, value, marker };
     tokens.push(token);
 
-    if (token.value === 0) return;
+    marker.on("mouseover", () => {
+      marker.bindPopup(`
+        <div style="font-size:18px;">
+          ${emojiFor(token.value)} Value ${token.value}
+        </div>
+        <div style="margin-top:6px;font-size:12px;">
+          <b>Hover:</b> View plant info<br>
+          <b>Click:</b> Pick up or merge<br>
+          <small>Stay within ${INTERACT_DISTANCE}m</small>
+        </div>
+      `).openPopup();
+    });
+
+    marker.on("mouseout", () => {
+      marker.closePopup();
+    });
     marker.on("click", () => onTokenClick(token));
   }
 }
@@ -121,12 +136,22 @@ function meters(a: leaflet.LatLng, b: leaflet.LatLng) {
 function onTokenClick(token: PlantToken) {
   const playerPos = playerMarker.getLatLng();
   const tokenPos = leaflet.latLng(token.lat, token.lng);
+  const dist = meters(playerPos, tokenPos);
 
-  if (meters(playerPos, tokenPos) > INTERACT_DISTANCE) return;
+  // Too far
+  if (dist > INTERACT_DISTANCE) {
+    statusPanelDiv.textContent = `Too far! Move closer. Distance: ${
+      dist.toFixed(0)
+    }m / Allowed: ${INTERACT_DISTANCE}m`;
+    alert(`You are too far away (${dist.toFixed(0)}m). Move closer!`);
+    return;
+  }
 
+  // MERGE (same value)
   if (heldValue !== null && token.value === heldValue) {
     const newVal = heldValue * 2;
 
+    // Update token
     heldValue = null;
     token.value = newVal;
 
@@ -137,6 +162,19 @@ function onTokenClick(token: PlantToken) {
         html: `<div style="font-size:22px;">${emojiFor(newVal)}</div>`,
       }),
     }).addTo(map);
+
+    // hover popup for merged token
+    token.marker.on("mouseover", () => {
+      token.marker.bindPopup(`
+        <div style="font-size:16px;">
+          ${emojiFor(newVal)} Value ${newVal}
+          <br><small>Move within ${INTERACT_DISTANCE}m to interact</small>
+        </div>
+      `).openPopup();
+    });
+
+    token.marker.on("mouseout", () => token.marker.closePopup());
+
     token.marker.on("click", () => onTokenClick(token));
 
     updateStatus();
@@ -144,6 +182,7 @@ function onTokenClick(token: PlantToken) {
     return;
   }
 
+  // PICK UP (always allowed when not merging)
   heldValue = token.value;
 
   token.marker.remove();

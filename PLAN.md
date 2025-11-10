@@ -27,5 +27,5 @@ Key gameplay challenge: Enable picking up, combining, and crafting seeds up to t
 - [x] Implement “combine if equal → grow doubled seed” action
 - [x] Win detection when hand contains value ≥ 256
 - [x] Fix holding plants
-- [ ] Popup messages
-- [ ] Show a message when the plant is far
+- [x] Popup messages
+- [x] Show a message when the plant is far
