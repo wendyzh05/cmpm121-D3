@@ -12,14 +12,6 @@ const CLASSROOM_LATLNG = leaflet.latLng(
   -122.05703507501151,
 );
 
-const controlPanelDiv = createDiv("controls");
-const NULL_ISLAND = leaflet.latLng(0, 0);
-const ZOOM = 19;
-const SPAWN_RADIUS = 0.002;
-const TOKEN_COUNT = 80;
-const INTERACT_DISTANCE = 30;
-
-// UI elements
 function createDiv(id: string): HTMLDivElement {
   const div = document.createElement("div");
   div.id = id;
@@ -27,12 +19,19 @@ function createDiv(id: string): HTMLDivElement {
   return div;
 }
 
+const controlPanelDiv = createDiv("controls");
+const ZOOM = 19;
+const SPAWN_RADIUS = 0.002;
+const TOKEN_COUNT = 80;
+const INTERACT_DISTANCE = 30;
+const STEP_SIZE = 0.001;
+
 const mapDiv = createDiv("map");
 const statusPanelDiv = createDiv("statusPanel");
 
 // Map setup
 const map = leaflet.map(mapDiv, {
-  center: NULL_ISLAND,
+  center: CLASSROOM_LATLNG,
   zoom: ZOOM,
   minZoom: ZOOM,
   maxZoom: ZOOM,
@@ -44,7 +43,10 @@ leaflet
   .tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19 })
   .addTo(map);
 
-const playerMarker = leaflet.marker(CLASSROOM_LATLNG).addTo(map);
+let playerLatLng = leaflet.latLng(36.997936938057016, -122.05703507501151);
+const playerMarker = leaflet.marker(playerLatLng).addTo(map).bindTooltip(
+  "You 🌸",
+);
 
 // Game State
 let heldValue: number | null = null;
@@ -112,17 +114,18 @@ function bindTokenPopup(token: PlantToken) {
 
 // Random plant token spawning (deterministic)
 
-function spawnTokens() {
+function spawnTokens(center: leaflet.LatLng) {
+  tokens.forEach((t) => t.marker.remove());
+
   for (let n = 0; n < TOKEN_COUNT; n++) {
     const latLng = randomLatLng(
-      CLASSROOM_LATLNG,
+      center,
       SPAWN_RADIUS,
-      luck("token-" + n),
-      luck("token-pos-" + n),
+      luck("token-" + n + "-" + center.lat),
+      luck("token-pos-" + n + "-" + center.lng),
     );
 
-    const value = 1; // initial token value
-
+    const value = 1;
     const marker = leaflet.marker([latLng.lat, latLng.lng], {
       icon: leaflet.divIcon({
         className: "token-label",
@@ -202,5 +205,33 @@ moveDiv.innerHTML = `
 `;
 controlPanelDiv.append(moveDiv);
 
+function movePlayer(dLat: number, dLng: number) {
+  playerLatLng = leaflet.latLng(
+    playerLatLng.lat + dLat,
+    playerLatLng.lng + dLng,
+  );
+  playerMarker.setLatLng(playerLatLng);
+  map.setView(playerLatLng);
+  spawnTokens(playerLatLng);
+  updateStatus();
+}
+
+document.getElementById("moveN")!.addEventListener(
+  "click",
+  () => movePlayer(STEP_SIZE, 0),
+);
+document.getElementById("moveS")!.addEventListener(
+  "click",
+  () => movePlayer(-STEP_SIZE, 0),
+);
+document.getElementById("moveE")!.addEventListener(
+  "click",
+  () => movePlayer(0, STEP_SIZE),
+);
+document.getElementById("moveW")!.addEventListener(
+  "click",
+  () => movePlayer(0, -STEP_SIZE),
+);
+
 updateStatus();
-spawnTokens();
+spawnTokens(playerLatLng);

@@ -34,6 +34,5 @@ Key gameplay challenge: Enable picking up, combining, and crafting seeds up to t
 D3.b
 
 - [x] Add movement
-- [ ] Implement movePlayer logic
-- [ ] Regenerate nearby tokens
-- [ ] Anchor world NULL island
+- [x] Implement movePlayer logic
+- [x] Regenerate nearby tokens
