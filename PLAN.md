@@ -30,3 +30,10 @@ Key gameplay challenge: Enable picking up, combining, and crafting seeds up to t
 - [x] Popup messages
 - [x] Show a message when the plant is far
 - [x] Remove code smells
+
+D3.b
+
+- [x] Add movement
+- [ ] Implement movePlayer logic
+- [ ] Regenerate nearby tokens
+- [ ] Anchor world NULL island

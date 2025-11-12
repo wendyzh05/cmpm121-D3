@@ -12,6 +12,8 @@ const CLASSROOM_LATLNG = leaflet.latLng(
   -122.05703507501151,
 );
 
+const controlPanelDiv = createDiv("controls");
+const NULL_ISLAND = leaflet.latLng(0, 0);
 const ZOOM = 19;
 const SPAWN_RADIUS = 0.002;
 const TOKEN_COUNT = 80;
@@ -30,7 +32,7 @@ const statusPanelDiv = createDiv("statusPanel");
 
 // Map setup
 const map = leaflet.map(mapDiv, {
-  center: CLASSROOM_LATLNG,
+  center: NULL_ISLAND,
   zoom: ZOOM,
   minZoom: ZOOM,
   maxZoom: ZOOM,
@@ -188,6 +190,17 @@ function checkWin() {
     alert("You grew a 🌳 TREE! You win!");
   }
 }
+
+const moveDiv = document.createElement("div");
+moveDiv.id = "movePanel";
+moveDiv.innerHTML = `
+  <h3>Move</h3>
+  <button id="moveN">⬆️ North</button>
+  <button id="moveS">⬇️ South</button>
+  <button id="moveE">➡️ East</button>
+  <button id="moveW">⬅️ West</button>
+`;
+controlPanelDiv.append(moveDiv);
 
 updateStatus();
 spawnTokens();
