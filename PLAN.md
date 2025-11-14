@@ -39,7 +39,7 @@ D3.b
 
 D3.c
 
-- [ ] Add cell ID system
-- [ ] Add Flyweight
-- [ ] Add a Memento store
-- [ ] Save tokens
+- [x] Add cell ID system
+- [x] Add Flyweight
+- [x] Add a Memento store
+- [x] Save tokens

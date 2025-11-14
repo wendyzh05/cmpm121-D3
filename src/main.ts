@@ -1,6 +1,5 @@
 // @deno-types="npm:@types/leaflet"
 import leaflet from "leaflet";
-
 import "leaflet/dist/leaflet.css";
 import "./style.css";
 import "./_leafletWorkaround.ts";
@@ -20,6 +19,7 @@ function createDiv(id: string): HTMLDivElement {
 }
 
 const controlPanelDiv = createDiv("controls");
+
 const ZOOM = 19;
 const SPAWN_RADIUS = 0.002;
 const TOKEN_COUNT = 80;
@@ -27,10 +27,23 @@ const INTERACT_DISTANCE = 30;
 const STEP_SIZE = 0.001;
 const CELL_SIZE = 0.001;
 
-function cellId(lat: number, lng: number): string {
+//Cell helpers
+
+function getCell(lat: number, lng: number) {
   const row = Math.floor(lat / CELL_SIZE);
   const col = Math.floor(lng / CELL_SIZE);
-  return `${row},${col}`;
+  return { row, col };
+}
+
+//Per-token persistence map
+const savedTokens: Record<string, number> = {};
+
+function saveToken(seedKey: string, value: number) {
+  savedTokens[seedKey] = value;
+}
+
+function loadToken(seedKey: string): number | undefined {
+  return savedTokens[seedKey];
 }
 
 const mapDiv = createDiv("map");
@@ -47,19 +60,19 @@ const map = leaflet.map(mapDiv, {
 });
 
 leaflet
-  .tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19 })
+  .tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    maxZoom: 19,
+    attribution:
+      '&copy; <a href="http://openstreetmap.org">OpenStreetMap</a> contributors',
+    subdomains: ["a", "b", "c"],
+  })
   .addTo(map);
 
-let playerLatLng = leaflet.latLng(36.997936938057016, -122.05703507501151);
+// Player state
+let playerLatLng = CLASSROOM_LATLNG;
 const playerMarker = leaflet.marker(playerLatLng).addTo(map).bindTooltip(
   "You 🌸",
 );
-
-type CellMemento = {
-  value: number; // Token value (0 means empty)
-};
-
-const savedCells: Record<string, CellMemento> = {};
 
 // Game State
 let heldValue: number | null = null;
@@ -69,9 +82,10 @@ type PlantToken = {
   lng: number;
   value: number;
   marker: leaflet.Marker;
+  seedKey: string; // UNIQUE ID
 };
 
-const tokens: PlantToken[] = [];
+let tokens: PlantToken[] = [];
 
 function emojiFor(v: number): string {
   const m: Record<number, string> = {
@@ -98,6 +112,7 @@ function meters(a: leaflet.LatLng, b: leaflet.LatLng) {
   return a.distanceTo(b);
 }
 
+// Deterministic random
 function randomLatLng(
   center: leaflet.LatLng,
   radius: number,
@@ -125,31 +140,30 @@ function bindTokenPopup(token: PlantToken) {
   token.marker.on("click", () => onTokenClick(token));
 }
 
-// Random plant token spawning (deterministic)
-
+//Random plant token spawning (deterministic)
 function spawnTokens(center: leaflet.LatLng) {
   tokens.forEach((t) => t.marker.remove());
-  tokens.length = 0;
+  tokens = [];
 
-  const RANGE = SPAWN_RADIUS;
+  const { row, col } = getCell(center.lat, center.lng);
 
   for (let n = 0; n < TOKEN_COUNT; n++) {
+    const seedKey = `cell:${row},${col}-token:${n}`;
     const latLng = randomLatLng(
       center,
-      RANGE,
-      luck("token-" + n + "-" + center.lat),
-      luck("token-pos-" + n + "-" + center.lng),
+      SPAWN_RADIUS,
+      luck(seedKey + "-1"),
+      luck(seedKey + "-2"),
     );
+    const saved = loadToken(seedKey);
+    const value = saved !== undefined ? saved : 1;
 
-    const id = cellId(latLng.lat, latLng.lng);
-
-    const value = savedCells[id]?.value ?? 1;
     if (value === 0) continue;
 
     const marker = leaflet.marker([latLng.lat, latLng.lng], {
       icon: leaflet.divIcon({
         className: "token-label",
-        html: emojiFor(value),
+        html: `<div style="font-size:26px">${emojiFor(value)}</div>`,
       }),
     }).addTo(map);
 
@@ -158,15 +172,17 @@ function spawnTokens(center: leaflet.LatLng) {
       lng: latLng.lng,
       value,
       marker,
+      seedKey,
     };
-    tokens.push(token);
 
+    tokens.push(token);
     bindTokenPopup(token);
   }
 }
 
 function pickUpToken(token: PlantToken) {
   heldValue = token.value;
+  saveToken(token.seedKey, 0);
   token.marker.remove();
   token.value = 0;
   updateStatus();
@@ -179,10 +195,16 @@ function mergeToken(token: PlantToken): boolean {
   const newVal = heldValue * 2;
   heldValue = null;
 
+  saveToken(token.seedKey, newVal);
+
   token.marker.remove();
   token.value = newVal;
+
   token.marker = leaflet.marker([token.lat, token.lng], {
-    icon: leaflet.divIcon({ className: "token-label", html: emojiFor(newVal) }),
+    icon: leaflet.divIcon({
+      className: "token-label",
+      html: `<div style="font-size:26px">${emojiFor(newVal)}</div>`,
+    }),
   }).addTo(map);
 
   bindTokenPopup(token);
@@ -191,20 +213,16 @@ function mergeToken(token: PlantToken): boolean {
   return true;
 }
 
+//Interaction
 function onTokenClick(token: PlantToken) {
-  const playerPos = playerMarker.getLatLng();
-  const tokenPos = leaflet.latLng(token.lat, token.lng);
-  const dist = meters(playerPos, tokenPos);
+  const dist = meters(playerLatLng, leaflet.latLng(token.lat, token.lng));
 
   if (dist > INTERACT_DISTANCE) {
-    statusPanelDiv.textContent = `Too far! Move closer. Distance: ${
-      dist.toFixed(0)
-    }m`;
+    statusPanelDiv.textContent = `Too far! (${dist.toFixed(0)}m)`;
     return;
   }
 
   if (mergeToken(token)) return;
-
   pickUpToken(token);
 }
 
@@ -214,14 +232,15 @@ function checkWin() {
   }
 }
 
+//Movement
 const moveDiv = document.createElement("div");
 moveDiv.id = "movePanel";
 moveDiv.innerHTML = `
   <h3>Move</h3>
-  <button id="moveN">⬆️ North</button>
-  <button id="moveS">⬇️ South</button>
-  <button id="moveE">➡️ East</button>
-  <button id="moveW">⬅️ West</button>
+  <button id="moveN">UP⬆️</button>
+  <button id="moveS">DOWN⬇️</button>
+  <button id="moveW">LEFT⬅️</button>
+  <button id="moveE">RIGHT➡️</button>
 `;
 controlPanelDiv.append(moveDiv);
 
@@ -233,7 +252,6 @@ function movePlayer(dLat: number, dLng: number) {
   playerMarker.setLatLng(playerLatLng);
   map.setView(playerLatLng);
   spawnTokens(playerLatLng);
-  updateStatus();
 }
 
 document.getElementById("moveN")!.addEventListener(
