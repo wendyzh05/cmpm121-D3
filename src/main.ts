@@ -25,6 +25,13 @@ const SPAWN_RADIUS = 0.002;
 const TOKEN_COUNT = 80;
 const INTERACT_DISTANCE = 30;
 const STEP_SIZE = 0.001;
+const CELL_SIZE = 0.001;
+
+function cellId(lat: number, lng: number): string {
+  const row = Math.floor(lat / CELL_SIZE);
+  const col = Math.floor(lng / CELL_SIZE);
+  return `${row},${col}`;
+}
 
 const mapDiv = createDiv("map");
 const statusPanelDiv = createDiv("statusPanel");
@@ -47,6 +54,12 @@ let playerLatLng = leaflet.latLng(36.997936938057016, -122.05703507501151);
 const playerMarker = leaflet.marker(playerLatLng).addTo(map).bindTooltip(
   "You 🌸",
 );
+
+type CellMemento = {
+  value: number; // Token value (0 means empty)
+};
+
+const savedCells: Record<string, CellMemento> = {};
 
 // Game State
 let heldValue: number | null = null;
@@ -116,16 +129,23 @@ function bindTokenPopup(token: PlantToken) {
 
 function spawnTokens(center: leaflet.LatLng) {
   tokens.forEach((t) => t.marker.remove());
+  tokens.length = 0;
+
+  const RANGE = SPAWN_RADIUS;
 
   for (let n = 0; n < TOKEN_COUNT; n++) {
     const latLng = randomLatLng(
       center,
-      SPAWN_RADIUS,
+      RANGE,
       luck("token-" + n + "-" + center.lat),
       luck("token-pos-" + n + "-" + center.lng),
     );
 
-    const value = 1;
+    const id = cellId(latLng.lat, latLng.lng);
+
+    const value = savedCells[id]?.value ?? 1;
+    if (value === 0) continue;
+
     const marker = leaflet.marker([latLng.lat, latLng.lng], {
       icon: leaflet.divIcon({
         className: "token-label",

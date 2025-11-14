@@ -36,3 +36,10 @@ D3.b
 - [x] Add movement
 - [x] Implement movePlayer logic
 - [x] Regenerate nearby tokens
+
+D3.c
+
+- [ ] Add cell ID system
+- [ ] Add Flyweight
+- [ ] Add a Memento store
+- [ ] Save tokens
