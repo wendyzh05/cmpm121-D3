@@ -260,7 +260,7 @@ function checkWin() {
 const moveDiv = document.createElement("div");
 moveDiv.id = "movePanel";
 moveDiv.innerHTML = `
-  <h3>Move</h3>
+  <h3>Flower Growth</h3>
   <button id="moveN">UP⬆️</button>
   <button id="moveS">DOWN⬇️</button>
   <button id="moveW">LEFT⬅️</button>
