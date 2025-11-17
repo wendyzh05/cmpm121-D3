@@ -49,6 +49,18 @@ function loadToken(seedKey: string): number | undefined {
 const mapDiv = createDiv("map");
 const statusPanelDiv = createDiv("statusPanel");
 
+function loadGameState() {
+  const tok = localStorage.getItem("savedTokens");
+  if (tok) Object.assign(savedTokens, JSON.parse(tok));
+
+  const lat = localStorage.getItem("playerLat");
+  const lng = localStorage.getItem("playerLng");
+  if (lat && lng) playerLatLng = leaflet.latLng(Number(lat), Number(lng));
+
+  const hv = localStorage.getItem("heldValue");
+  heldValue = hv === "null" ? null : hv ? Number(hv) : null;
+}
+
 // Map setup
 const map = leaflet.map(mapDiv, {
   center: CLASSROOM_LATLNG,
@@ -331,5 +343,8 @@ movementSwitch.onclick = () => {
 
 controlPanelDiv.append(movementSwitch);
 
+loadGameState();
 updateStatus();
 spawnTokens(playerLatLng);
+map.setView(playerLatLng);
+playerMarker.setLatLng(playerLatLng);
