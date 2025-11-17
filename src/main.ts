@@ -49,6 +49,16 @@ function loadToken(seedKey: string): number | undefined {
 const mapDiv = createDiv("map");
 const statusPanelDiv = createDiv("statusPanel");
 
+function saveGameState() {
+  localStorage.setItem("savedTokens", JSON.stringify(savedTokens));
+  localStorage.setItem("playerLat", String(playerLatLng.lat));
+  localStorage.setItem("playerLng", String(playerLatLng.lng));
+  localStorage.setItem(
+    "heldValue",
+    heldValue === null ? "null" : String(heldValue),
+  );
+}
+
 function loadGameState() {
   const tok = localStorage.getItem("savedTokens");
   if (tok) Object.assign(savedTokens, JSON.parse(tok));
@@ -199,6 +209,7 @@ function pickUpToken(token: PlantToken) {
   token.value = 0;
   updateStatus();
   checkWin();
+  saveGameState();
 }
 
 function mergeToken(token: PlantToken): boolean {
@@ -211,6 +222,7 @@ function mergeToken(token: PlantToken): boolean {
 
   token.marker.remove();
   token.value = newVal;
+  saveGameState();
 
   token.marker = leaflet.marker([token.lat, token.lng], {
     icon: leaflet.divIcon({
@@ -303,6 +315,7 @@ function movePlayer(dLat: number, dLng: number) {
   playerMarker.setLatLng(playerLatLng);
   map.setView(playerLatLng);
   spawnTokens(playerLatLng);
+  saveGameState();
 }
 
 const buttonMovement = new ButtonMovement(movePlayer);
@@ -323,6 +336,14 @@ document.getElementById("moveW")!.addEventListener(
   "click",
   () => buttonMovement.move(0, -STEP_SIZE),
 );
+
+const resetBtn = document.createElement("button");
+resetBtn.textContent = "New Game 🔁";
+resetBtn.onclick = () => {
+  localStorage.clear();
+  location.reload();
+};
+controlPanelDiv.append(resetBtn);
 
 let movementMode: MovementController = buttonMovement;
 

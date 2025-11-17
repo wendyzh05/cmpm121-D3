@@ -47,7 +47,7 @@ D3.c
 D3.d
 
 - [x] Add Movement Interface
-- [ ] Add a Mode Switcher (button vs geolocation)
-- [ ] Add Save + Load System
-- [ ] Auto-Save On Every Interaction
-- [ ] Add “New Game” Button
+- [x] Add a Mode Switcher (button vs geolocation)
+- [x] Add Save + Load System
+- [x] Auto-Save On Every Interaction
+- [x] Add “New Game” Button
