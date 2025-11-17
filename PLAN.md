@@ -43,3 +43,11 @@ D3.c
 - [x] Add Flyweight
 - [x] Add a Memento store
 - [x] Save tokens
+
+D3.d
+
+- [x] Add Movement Interface
+- [ ] Add a Mode Switcher
+- [ ] Add Save + Load System
+- [ ] Auto-Save On Every Interaction
+- [ ] Add “New Game” Button

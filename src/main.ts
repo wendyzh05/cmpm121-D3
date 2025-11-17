@@ -244,6 +244,24 @@ moveDiv.innerHTML = `
 `;
 controlPanelDiv.append(moveDiv);
 
+interface MovementController {
+  start(): void;
+  stop(): void;
+}
+
+class ButtonMovement implements MovementController {
+  constructor(private callback: (lat: number, lng: number) => void) {}
+
+  start() {}
+  stop() {}
+
+  move(dLat: number, dLng: number) {
+    this.callback(dLat, dLng);
+  }
+}
+
+
+
 function movePlayer(dLat: number, dLng: number) {
   playerLatLng = leaflet.latLng(
     playerLatLng.lat + dLat,
@@ -254,21 +272,23 @@ function movePlayer(dLat: number, dLng: number) {
   spawnTokens(playerLatLng);
 }
 
+const buttonMovement = new ButtonMovement(movePlayer);
+
 document.getElementById("moveN")!.addEventListener(
   "click",
-  () => movePlayer(STEP_SIZE, 0),
+  () => buttonMovement.move(STEP_SIZE, 0),
 );
 document.getElementById("moveS")!.addEventListener(
   "click",
-  () => movePlayer(-STEP_SIZE, 0),
+  () => buttonMovement.move(-STEP_SIZE, 0),
 );
 document.getElementById("moveE")!.addEventListener(
   "click",
-  () => movePlayer(0, STEP_SIZE),
+  () => buttonMovement.move(0, STEP_SIZE),
 );
 document.getElementById("moveW")!.addEventListener(
   "click",
-  () => movePlayer(0, -STEP_SIZE),
+  () => buttonMovement.move(0, -STEP_SIZE),
 );
 
 updateStatus();
