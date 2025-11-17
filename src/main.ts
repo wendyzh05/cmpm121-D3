@@ -260,7 +260,28 @@ class ButtonMovement implements MovementController {
   }
 }
 
+class GeoMovement implements MovementController {
+  watchId: number | null = null;
 
+  constructor(private callback: (lat: number, lng: number) => void) {}
+
+  start() {
+    if (!navigator.geolocation) {
+      alert("Geolocation not supported!");
+      return;
+    }
+
+    this.watchId = navigator.geolocation.watchPosition((pos) => {
+      const lat = pos.coords.latitude;
+      const lng = pos.coords.longitude;
+      this.callback(lat - playerLatLng.lat, lng - playerLatLng.lng);
+    });
+  }
+
+  stop() {
+    if (this.watchId !== null) navigator.geolocation.clearWatch(this.watchId);
+  }
+}
 
 function movePlayer(dLat: number, dLng: number) {
   playerLatLng = leaflet.latLng(
@@ -290,6 +311,25 @@ document.getElementById("moveW")!.addEventListener(
   "click",
   () => buttonMovement.move(0, -STEP_SIZE),
 );
+
+let movementMode: MovementController = buttonMovement;
+
+const movementSwitch = document.createElement("button");
+movementSwitch.textContent = "Use Geolocation 🌍";
+movementSwitch.onclick = () => {
+  movementMode.stop();
+
+  if (movementMode instanceof ButtonMovement) {
+    movementMode = new GeoMovement(movePlayer);
+    movementSwitch.textContent = "Use Buttons 🎮";
+    movementMode.start();
+  } else {
+    movementMode = buttonMovement;
+    movementSwitch.textContent = "Use Geolocation 🌍";
+  }
+};
+
+controlPanelDiv.append(movementSwitch);
 
 updateStatus();
 spawnTokens(playerLatLng);
